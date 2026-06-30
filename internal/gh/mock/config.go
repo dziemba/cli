@@ -4,10 +4,9 @@
 package ghmock
 
 import (
-	"sync"
-
 	"github.com/cli/cli/v2/internal/gh"
 	o "github.com/cli/cli/v2/pkg/option"
+	"sync"
 )
 
 // Ensure, that ConfigMock does implement gh.Config.
@@ -28,6 +27,9 @@ var _ gh.Config = &ConfigMock{}
 //			},
 //			AliasesFunc: func() gh.AliasConfig {
 //				panic("mock out the Aliases method")
+//			},
+//			ApiHostFunc: func(hostname string) string {
+//				panic("mock out the ApiHost method")
 //			},
 //			AuthenticationFunc: func() gh.AuthConfig {
 //				panic("mock out the Authentication method")
@@ -96,6 +98,9 @@ type ConfigMock struct {
 	// AliasesFunc mocks the Aliases method.
 	AliasesFunc func() gh.AliasConfig
 
+	// ApiHostFunc mocks the ApiHost method.
+	ApiHostFunc func(hostname string) string
+
 	// AuthenticationFunc mocks the Authentication method.
 	AuthenticationFunc func() gh.AuthConfig
 
@@ -161,6 +166,11 @@ type ConfigMock struct {
 		}
 		// Aliases holds details about calls to the Aliases method.
 		Aliases []struct {
+		}
+		// ApiHost holds details about calls to the ApiHost method.
+		ApiHost []struct {
+			// Hostname is the hostname argument value.
+			Hostname string
 		}
 		// Authentication holds details about calls to the Authentication method.
 		Authentication []struct {
@@ -247,6 +257,7 @@ type ConfigMock struct {
 	lockAccessibleColors   sync.RWMutex
 	lockAccessiblePrompter sync.RWMutex
 	lockAliases            sync.RWMutex
+	lockApiHost            sync.RWMutex
 	lockAuthentication     sync.RWMutex
 	lockBrowser            sync.RWMutex
 	lockCacheDir           sync.RWMutex
@@ -354,6 +365,38 @@ func (mock *ConfigMock) AliasesCalls() []struct {
 	mock.lockAliases.RLock()
 	calls = mock.calls.Aliases
 	mock.lockAliases.RUnlock()
+	return calls
+}
+
+// ApiHost calls ApiHostFunc.
+func (mock *ConfigMock) ApiHost(hostname string) string {
+	if mock.ApiHostFunc == nil {
+		panic("ConfigMock.ApiHostFunc: method is nil but Config.ApiHost was just called")
+	}
+	callInfo := struct {
+		Hostname string
+	}{
+		Hostname: hostname,
+	}
+	mock.lockApiHost.Lock()
+	mock.calls.ApiHost = append(mock.calls.ApiHost, callInfo)
+	mock.lockApiHost.Unlock()
+	return mock.ApiHostFunc(hostname)
+}
+
+// ApiHostCalls gets all the calls that were made to ApiHost.
+// Check the length with:
+//
+//	len(mockedConfig.ApiHostCalls())
+func (mock *ConfigMock) ApiHostCalls() []struct {
+	Hostname string
+} {
+	var calls []struct {
+		Hostname string
+	}
+	mock.lockApiHost.RLock()
+	calls = mock.calls.ApiHost
+	mock.lockApiHost.RUnlock()
 	return calls
 }
 

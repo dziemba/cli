@@ -258,8 +258,22 @@ func generateScopesSuggestion(statusCode int, endpointNeedsScopes, tokenHasScope
 	return ""
 }
 
+var apiHostForHost func(string) string
+
+// SetAPIHostResolver configures the function used to resolve API host
+// overrides. When set, REST and GraphQL requests are routed to the
+// returned host instead of the default derived endpoint.
+func SetAPIHostResolver(fn func(string) string) {
+	apiHostForHost = fn
+}
+
 func clientOptions(hostname string, transport http.RoundTripper) ghAPI.ClientOptions {
-	// AuthToken, and Headers are being handled by transport,
+	if apiHostForHost != nil {
+		if h := apiHostForHost(hostname); h != "" {
+			hostname = h
+		}
+	}
+	// AuthToken and Headers are being handled by transport,
 	// so let go-gh know that it does not need to resolve them.
 	opts := ghAPI.ClientOptions{
 		AuthToken: "none",

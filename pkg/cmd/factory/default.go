@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/cli/cli/v2/api"
@@ -191,6 +193,12 @@ func HttpClientFunc(cfgFunc func() (gh.Config, error), ios *iostreams.IOStreams,
 		if err != nil {
 			return nil, err
 		}
+		api.SetAPIHostResolver(func(hostname string) string {
+			if v := os.Getenv("GH_API_URL_" + encodeHostname(hostname)); v != "" {
+				return v
+			}
+			return cfg.ApiHost(hostname)
+		})
 		opts := api.HTTPClientOptions{
 			Config:            cfg.Authentication(),
 			Log:               ios.ErrOut,
@@ -286,6 +294,15 @@ func extensionManager(f *cmdutil.Factory) *extension.Manager {
 	em.SetClient(api.NewCachedHTTPClient(client, time.Second*30))
 
 	return em
+}
+
+// encodeHostname encodes a hostname for use in environment variable names.
+// Dots become single underscores and hyphens become double underscores,
+// following the convention used by Terraform's TF_TOKEN_* variables.
+func encodeHostname(hostname string) string {
+	hostname = strings.ReplaceAll(hostname, "-", "__")
+	hostname = strings.ReplaceAll(hostname, ".", "_")
+	return hostname
 }
 
 // SSOURL returns the URL of a SAML SSO challenge received by the server for clients that use ExtractHeader

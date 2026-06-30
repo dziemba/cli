@@ -683,6 +683,53 @@ func requireNoKey(t *testing.T, cfg *ghConfig.Config, keys []string) {
 	require.ErrorAs(t, err, &keyNotFoundError)
 }
 
+func TestActiveTokenResolvesAPIHost(t *testing.T) {
+	t.Run("resolves token when called with api_host", func(t *testing.T) {
+		// Given a host with an oauth_token and an api_host configured
+		authCfg := newTestAuthConfig(t)
+		_, err := authCfg.Login("example.ghe.com", "test-user", "test-token", "ssh", false)
+		require.NoError(t, err)
+		authCfg.cfg.Set([]string{hostsKey, "example.ghe.com", apiHostKey}, "api-gateway.example.net")
+
+		// When we get the token using the api_host
+		token, source := authCfg.ActiveToken("api-gateway.example.net")
+
+		// Then it resolves to the original host's token
+		require.Equal(t, "test-token", token)
+		require.Equal(t, oauthTokenKey, source)
+	})
+
+	t.Run("returns empty for unknown host", func(t *testing.T) {
+		// Given a host with an api_host configured
+		authCfg := newTestAuthConfig(t)
+		_, err := authCfg.Login("example.ghe.com", "test-user", "test-token", "ssh", false)
+		require.NoError(t, err)
+		authCfg.cfg.Set([]string{hostsKey, "example.ghe.com", apiHostKey}, "api-gateway.example.net")
+
+		// When we get the token for a completely unknown host
+		token, _ := authCfg.ActiveToken("unknown.example.com")
+
+		// Then no token is found
+		require.Equal(t, "", token)
+	})
+
+	t.Run("api_host lookup is case-insensitive", func(t *testing.T) {
+		// Given a host with an api_host configured in mixed case
+		authCfg := newTestAuthConfig(t)
+		_, err := authCfg.Login("example.ghe.com", "test-user", "test-token", "ssh", false)
+		require.NoError(t, err)
+		authCfg.cfg.Set([]string{hostsKey, "example.ghe.com", apiHostKey}, "API-Gateway.Example.Net")
+
+		// When we get the token using the api_host in different case
+		token, source := authCfg.ActiveToken("api-gateway.example.net")
+
+		// Then it resolves the token
+		require.Equal(t, "test-token", token)
+		require.Equal(t, oauthTokenKey, source)
+	})
+
+}
+
 // Post migration tests
 
 func TestUserWorksRightAfterMigration(t *testing.T) {

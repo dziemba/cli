@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/cli/cli/v2/internal/gh"
 	"github.com/cli/cli/v2/internal/keyring"
@@ -20,6 +21,7 @@ const (
 	accessibleColorsKey   = "accessible_colors" // used by cli/go-gh to enable the use of customizable, accessible 4-bit colors.
 	accessiblePrompterKey = "accessible_prompter"
 	aliasesKey            = "aliases"
+	apiHostKey            = "api_host"
 	browserKey            = "browser" // used by cli/go-gh to open URLs in web browsers
 	colorLabelsKey        = "color_labels"
 	editorKey             = "editor" // used by cli/go-gh to open interactive text editor
@@ -123,6 +125,13 @@ func (c *cfg) AccessibleColors(hostname string) gh.ConfigEntry {
 func (c *cfg) AccessiblePrompter(hostname string) gh.ConfigEntry {
 	// Intentionally panic if there is no user provided value or default value (which would be a programmer error)
 	return c.GetOrDefault(hostname, accessiblePrompterKey).Unwrap()
+}
+
+func (c *cfg) ApiHost(hostname string) string {
+	if val := c.get(hostname, apiHostKey); val.IsSome() {
+		return val.Unwrap()
+	}
+	return ""
 }
 
 func (c *cfg) Browser(hostname string) gh.ConfigEntry {
@@ -238,6 +247,9 @@ func (c *AuthConfig) ActiveToken(hostname string) (string, string) {
 	if c.tokenOverride != nil {
 		return c.tokenOverride(hostname)
 	}
+	if original := c.authHostFor(hostname); original != "" {
+		hostname = original
+	}
 	token, source := ghauth.TokenFromEnvOrConfig(hostname)
 	if token == "" {
 		var user string
@@ -257,6 +269,23 @@ func (c *AuthConfig) ActiveToken(hostname string) (string, string) {
 		}
 	}
 	return token, source
+}
+
+// authHostFor checks whether hostname is a configured api_host value for
+// any known host. If so, it returns the original host so that token
+// resolution uses the right credentials.
+func (c *AuthConfig) authHostFor(hostname string) string {
+	hosts, err := c.cfg.Keys([]string{hostsKey})
+	if err != nil {
+		return ""
+	}
+	for _, host := range hosts {
+		apiHost, err := c.cfg.Get([]string{hostsKey, host, apiHostKey})
+		if err == nil && strings.EqualFold(apiHost, hostname) {
+			return host
+		}
+	}
+	return ""
 }
 
 // HasActiveToken returns true when a token for the hostname is present.
